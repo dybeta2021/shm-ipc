@@ -292,7 +292,7 @@ namespace ots::store {
                 if (cpu_set_affinity(cpu_id)) {
                     SPDLOG_INFO("Set cpu_id {} successfully.", cpu_id);
                 } else {
-                    SPDLOG_WARN("Set cpu_id {} failed.", cpu_id);
+                    SPDLOG_INFO("Set cpu_id {} failed.", cpu_id);
                 }
             }
 
@@ -308,9 +308,9 @@ namespace ots::store {
                 size_t v_size = value_size;
 
                 // value 4x min_memory_size for buffer
-                size_t shm_size = header_size + item_size * item_num * 2 + k_size * item_num * 2 + v_size * item_num * 2 * 4;
+                size_t shm_size = header_size + item_size * item_num * 2 + k_size * item_num * 2 + v_size * item_num * 2 * 2;
 
-                SPDLOG_DEBUG("store size: {}.", shm_size);
+                SPDLOG_INFO("store size: {}.", shm_size);
                 if (shm_size > GB) {
                     SPDLOG_ERROR("shm-kv size no more than {}, params is {}.", GB, shm_size);
                     return -1;
@@ -332,16 +332,9 @@ namespace ots::store {
                     SPDLOG_ERROR("Shared memory error!");
                     return -4;
                 }
-
-                reader_buffer_ = new Buffer(sizeof(store_item) * item_num);
-                if (!reader_buffer_->GetShm()) {
-                    SPDLOG_ERROR("Buffer error!");
-                    return -5;
-                }
             }
 
             store_header_ = (store_header *) page_->GetShmDataAddress();
-            reader_item_buffer_ = (store_item *) reader_buffer_->GetShmDataAddress();
             if (init_header) {
                 store_header_->item_id = 0;
                 store_header_->item_a_used = 0;
@@ -355,7 +348,7 @@ namespace ots::store {
                 store_header_->reader_id = 0;
                 store_header_->item_max_used = item_num;
                 store_header_->key_max_used = KeyMaxSize * item_num;
-                store_header_->value_max_used = value_size * item_num * 4;
+                store_header_->value_max_used = value_size * item_num * 2;
 
                 // clean item memory
                 memset((char *) store_header_ + sizeof(store_header), 0, sizeof(store_item) * item_num * 2);
@@ -380,6 +373,15 @@ namespace ots::store {
             item_max_used_ = &store_header_->item_max_used;
             key_max_used_ = &store_header_->key_max_used;
             value_max_used_ = &store_header_->value_max_used;
+
+            // reader item buffer
+            reader_buffer_ = new Buffer(sizeof(store_item) * (*item_max_used_));
+            if (!reader_buffer_->GetShm()) {
+                SPDLOG_ERROR("Buffer error!");
+                return -5;
+            }
+            reader_item_buffer_ = (store_item *) reader_buffer_->GetShmDataAddress();
+
             return 0;
         }
 
