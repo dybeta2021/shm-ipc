@@ -35,6 +35,7 @@ int main(){
             t.th = i;
             client.AddData(t);
         }
+        client.Clear();
         SPDLOG_INFO("end.");
     }
 
@@ -43,7 +44,7 @@ int main(){
         auto client = Record<TestBufferData>("test.ts", 1024, false, false);
         auto data = client.GetAllData();
         for (auto v: data) {
-            std::cout << v.th << std::endl;
+            std::cout << v->th << std::endl;
         }
     }
 

@@ -87,7 +87,7 @@ public:
 #ifdef _WIN32
             if (_chsize(fd, (int64_t) page_size_) == 0) {
 #else
-                if (ftruncate(fd, (int64_t) page_size_) == 0) {
+            if (ftruncate(fd, (int64_t) page_size_) == 0) {
 #endif
 
                 SPDLOG_DEBUG("Ftruncate, file size:{}", page_size_);

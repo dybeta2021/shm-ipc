@@ -21,7 +21,7 @@ private:
     bool SetCapacity(size_t capacity) {
         try {
             content_.reserve(capacity);
-            content_.resize(capacity); // resize to match capacity
+            content_.resize(capacity);// resize to match capacity
         } catch (const std::length_error &e) {
             SPDLOG_ERROR("SetCapacity error: {}.", e.what());
             return false;
@@ -61,8 +61,12 @@ private:
 
 public:
     Record(const std::string &file_path, size_t item_num, bool writer, bool init)
-            : page_ptr_(nullptr) {
+        : page_ptr_(nullptr) {
         Init(file_path, item_num, writer, init);
+    }
+
+    void Clear() {
+        bookmark_ptr_->cursor = 0;
     }
 
     int AddData(const T &data) {
@@ -76,18 +80,19 @@ public:
         return 0;
     }
 
-    T *GetData(size_t idx) const {
-        if (idx >= bookmark_ptr_->item_num) {
-            return nullptr;
-        }
-        return content_[idx];
-    }
+    //    T *GetData(size_t idx) const {
+    //        if (idx >= bookmark_ptr_->item_num) {
+    //            return nullptr;
+    //        }
+    //        return content_[idx];
+    //    }
 
-    std::vector<T> GetAllData() const {
-        std::vector<T> cache;
+    /// 返回包含指向所有数据的指针的向量
+    std::vector<T *> GetAllData() const {
+        std::vector<T *> cache;
         cache.reserve(bookmark_ptr_->cursor);
         for (size_t i = 0; i < bookmark_ptr_->cursor; ++i) {
-            cache.push_back(*content_[i]);
+            cache.push_back(content_[i]);
         }
         return cache;
     }
