@@ -5,6 +5,7 @@
 #pragma once
 #include "page.h"
 #include "spdlog/spdlog.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -12,25 +13,27 @@
 #include <iostream>
 #include <string>
 
+
 namespace store {
     /// store header
     struct store_header {
-        int32_t item_a_used;
-        int32_t item_b_used;
-        int32_t key_a_used;
-        int32_t key_b_used;
-        int32_t value_a_used;
-        int32_t value_b_used;
+        std::atomic<int32_t> item_a_used;
+        std::atomic<int32_t> item_b_used;
+        std::atomic<int32_t> key_a_used;
+        std::atomic<int32_t> key_b_used;
+        std::atomic<int32_t> value_a_used;
+        std::atomic<int32_t> value_b_used;
 
-        uint8_t current_item_id;
-        uint8_t current_key_id;
-        uint8_t current_value_id;
-        uint8_t current_reader_id;
+        std::atomic<uint8_t> current_item_id;
+        std::atomic<uint8_t> current_key_id;
+        std::atomic<uint8_t> current_value_id;
+        std::atomic<uint8_t> current_reader_id;
 
-        int32_t item_max_used;
-        int32_t key_max_used;
-        int32_t value_max_used;
+        std::atomic<int32_t> item_max_used;
+        std::atomic<int32_t> key_max_used;
+        std::atomic<int32_t> value_max_used;
     };
+
 
     /// item store key address and value address
     struct store_item {
@@ -72,22 +75,22 @@ namespace store {
         store_item *writer_item_ = nullptr;
         store_item *reader_item_ = nullptr;
         store_item *reader_item_buffer_ = nullptr;
-        int32_t *writer_item_used_ = nullptr;
-        int32_t *reader_item_used_ = nullptr;
+        std::atomic<int32_t> *writer_item_used_ = nullptr;
+        std::atomic<int32_t> *reader_item_used_ = nullptr;
 
         char *writer_key_ = nullptr;
         char *reader_key_ = nullptr;
-        int32_t *writer_key_used_ = nullptr;
-        int32_t *reader_key_used_ = nullptr;
+        std::atomic<int32_t> *writer_key_used_ = nullptr;
+        std::atomic<int32_t> *reader_key_used_ = nullptr;
 
         char *writer_value_ = nullptr;
         char *reader_value_ = nullptr;
-        int32_t *writer_value_used_ = nullptr;
-        int32_t *reader_value_used_ = nullptr;
+        std::atomic<int32_t> *writer_value_used_ = nullptr;
+        std::atomic<int32_t> *reader_value_used_ = nullptr;
 
-        int32_t *item_max_used_ = nullptr;
-        int32_t *key_max_used_ = nullptr;
-        int32_t *value_max_used_ = nullptr;
+        std::atomic<int32_t> *item_max_used_ = nullptr;
+        std::atomic<int32_t> *key_max_used_ = nullptr;
+        std::atomic<int32_t> *value_max_used_ = nullptr;
 
         int32_t cache_used_{};
         Page *page_ = nullptr;
@@ -122,19 +125,19 @@ namespace store {
 
         int ResetKey(store_data &key) {
             // memory space size allow
-            int32_t key_need = *writer_key_used_ + key.length + 1;
-            if (key_need <= *key_max_used_) {
+            int32_t key_need = writer_key_used_->load() + key.length + 1;
+            if (key_need <= key_max_used_->load()) {
                 SPDLOG_DEBUG("No need reset_key.");
                 return 0;
             }
 
             // if still bigger than key_max_used return false
             key_need = key.length + 1;
-            for (int32_t i = 0; i < *writer_item_used_; i++) {
+            for (int32_t i = 0; i < writer_item_used_->load(); i++) {
                 key_need += (writer_item_ + i)->key_len;
             }
-            if (key_need >= *key_max_used_) {
-                SPDLOG_ERROR("Key buffer memory size error, key_max_used: {}, need: {}", *writer_key_used_, key_need);
+            if (key_need >= key_max_used_->load()) {
+                SPDLOG_ERROR("Key buffer memory size error, key_max_used: {}, need: {}", writer_key_used_->load(), key_need);
                 return -1;
             }
 
@@ -152,7 +155,7 @@ namespace store {
             }
 
             int32_t key_used = 0;
-            for (int32_t i = 0; i < *writer_item_used_; i++) {
+            for (int32_t i = 0; i < writer_item_used_->load(); i++) {
                 item = writer_item_ + i;
                 memcpy(key_to_ + key_used, key_from_ + item->key_offset, item->key_len);
                 item->key_offset = key_used;
@@ -168,26 +171,26 @@ namespace store {
                 writer_key_ = store_data_address_.key_b_address;
                 writer_key_used_ = &store_header_->key_b_used;
             }
-            *writer_key_used_ = key_used;
+            writer_key_used_->store(key_used);
             SPDLOG_DEBUG("Reset key buffer.");
             return 0;
         }
 
         int ResetValue(store_data &value) {
             // memory space size allow
-            int32_t value_need = *writer_value_used_ + value.length + 1;
-            if (value_need <= *value_max_used_) {
+            int32_t value_need = writer_value_used_->load() + value.length + 1;
+            if (value_need <= value_max_used_->load()) {
                 SPDLOG_DEBUG("No need reset_value.");
                 return 0;
             }
 
             // if still bigger than value_max_used return false
             value_need = value.length + 1;
-            for (int32_t i = 0; i < *writer_item_used_; i++) {
+            for (int32_t i = 0; i < writer_item_used_->load(); i++) {
                 value_need += (writer_item_ + i)->value_len;
             }
-            if (value_need >= *value_max_used_) {
-                SPDLOG_ERROR("Value buffer memory size error, value_max_used: {}, need: {}", *writer_value_used_,
+            if (value_need >= value_max_used_->load()) {
+                SPDLOG_ERROR("Value buffer memory size error, value_max_used: {}, need: {}", writer_value_used_->load(),
                              value_need);
                 return -1;
             }
@@ -206,7 +209,7 @@ namespace store {
             }
 
             int32_t value_used = 0;
-            for (int32_t i = 0; i < *writer_item_used_; i++) {
+            for (int32_t i = 0; i < writer_item_used_->load(); i++) {
                 item = writer_item_ + i;
                 memcpy(value_to_ + value_used, value_from_ + item->value_offset, item->value_len);
                 item->value_offset = value_used;
@@ -222,15 +225,15 @@ namespace store {
                 writer_value_ = store_data_address_.value_b_address;
                 writer_value_used_ = &store_header_->value_b_used;
             }
-            *writer_value_used_ = value_used;
+            writer_value_used_->store(value_used);
 
             SPDLOG_DEBUG("Reset value buffer.");
             return 0;
         }
 
         int AddItem(store_data &key, store_data &value) {
-            if (*writer_item_used_ + 1 > *item_max_used_) {
-                SPDLOG_ERROR("item_max_used_:{}, current_item_num:{}", *item_max_used_, *writer_item_used_);
+            if (writer_item_used_->load() + 1 > item_max_used_->load()) {
+                SPDLOG_ERROR("item_max_used_:{}, current_item_num:{}", item_max_used_->load(), writer_item_used_->load());
                 return -1;
             }
 
@@ -243,10 +246,10 @@ namespace store {
 
             // find the store_data_address_ to insert new item
             store_item *item = writer_item_;
-            if (*writer_item_used_ > 0) {
+            if (writer_item_used_->load() > 0) {
                 bool break_label = false;
                 int32_t i;
-                for (i = 0; i < *writer_item_used_; i++) {
+                for (i = 0; i < writer_item_used_->load(); i++) {
                     item = writer_item_ + i;
                     if (item->key_len > key.length + 1) {
                         break_label = true;
@@ -263,7 +266,7 @@ namespace store {
                 //move bigger item to next item
                 if (break_label) {
                     i--;
-                    memcpy(writer_item_ + i + 1, writer_item_ + i, (*writer_item_used_ - i) * sizeof(store_item));
+                    memcpy(writer_item_ + i + 1, writer_item_ + i, (writer_item_used_->load() - i) * sizeof(store_item));
                 }
                 // end place append
                 else {
@@ -271,9 +274,9 @@ namespace store {
                 }
             }
             item->key_len = key.length + 1;
-            item->key_offset = *writer_key_used_;
+            item->key_offset = writer_key_used_->load();
             item->value_len = value.length + 1;
-            item->value_offset = *writer_value_used_;
+            item->value_offset = writer_value_used_->load();
 
             memcpy(writer_key_ + item->key_offset, key.data, key.length);
             char *key_ = writer_key_ + item->key_offset + key.length;
@@ -283,9 +286,9 @@ namespace store {
             char *value_ = writer_value_ + item->value_offset + value.length;
             *value_ = '\0';
 
-            *writer_item_used_ += 1;
-            *writer_key_used_ += item->key_len;
-            *writer_value_used_ += item->value_len;
+            writer_item_used_->fetch_add(1);
+            writer_key_used_->fetch_add(item->key_len);
+            writer_value_used_->fetch_add(item->value_len);
             return 0;
         }
 
@@ -294,13 +297,13 @@ namespace store {
                 return -1;
             }
             item->value_len = value.length + 1;
-            item->value_offset = *writer_value_used_;
+            item->value_offset = writer_value_used_->load();
 
             memcpy(writer_value_ + item->value_offset, value.data, value.length);
             char *value_ = writer_value_ + item->value_offset + value.length;
             *value_ = '\0';
 
-            *writer_value_used_ += item->value_len;
+            writer_value_used_->fetch_add(item->value_len);
             return 0;
         }
 
@@ -355,36 +358,36 @@ namespace store {
 
             store_header_ = (store_header *) page_->GetShmDataAddress();
             if (init_header) {
-                store_header_->current_item_id = 0;
-                store_header_->item_a_used = 0;
-                store_header_->item_b_used = 0;
-                store_header_->current_key_id = 0;
-                store_header_->key_a_used = 0;
-                store_header_->key_b_used = 0;
-                store_header_->current_value_id = 0;
-                store_header_->value_a_used = 0;
-                store_header_->value_b_used = 0;
-                store_header_->current_reader_id = 0;
-                store_header_->item_max_used = item_num;
-                store_header_->key_max_used = KeyMaxSize * item_num;
-                store_header_->value_max_used = value_size * item_num * 2;
+                store_header_->current_item_id.store(0);
+                store_header_->item_a_used.store(0);
+                store_header_->item_b_used.store(0);
+                store_header_->current_key_id.store(0);
+                store_header_->key_a_used.store(0);
+                store_header_->key_b_used.store(0);
+                store_header_->current_value_id.store(0);
+                store_header_->value_a_used.store(0);
+                store_header_->value_b_used.store(0);
+                store_header_->current_reader_id.store(0);
+                store_header_->item_max_used.store(item_num);
+                store_header_->key_max_used.store(KeyMaxSize * item_num);
+                store_header_->value_max_used.store(value_size * item_num * 2);
 
                 // clean item memory
                 memset((char *) store_header_ + sizeof(store_header), 0, sizeof(store_item) * item_num * 2);
             }
             store_data_address_.item_a_address = (store_item *) ((char *) store_header_ + sizeof(store_header));
-            store_data_address_.item_b_address = (store_item *) store_data_address_.item_a_address + store_header_->item_max_used;
-            store_data_address_.key_a_address = (char *) ((store_item *) store_data_address_.item_b_address + store_header_->item_max_used);
-            store_data_address_.key_b_address = (char *) store_data_address_.key_a_address + store_header_->key_max_used;
-            store_data_address_.value_a_address = (char *) store_data_address_.key_b_address + store_header_->key_max_used;
-            store_data_address_.value_b_address = (char *) store_data_address_.value_a_address + store_header_->value_max_used;
+            store_data_address_.item_b_address = (store_item *) store_data_address_.item_a_address + store_header_->item_max_used.load();
+            store_data_address_.key_a_address = (char *) ((store_item *) store_data_address_.item_b_address + store_header_->item_max_used.load());
+            store_data_address_.key_b_address = (char *) store_data_address_.key_a_address + store_header_->key_max_used.load();
+            store_data_address_.value_a_address = (char *) store_data_address_.key_b_address + store_header_->key_max_used.load();
+            store_data_address_.value_b_address = (char *) store_data_address_.value_a_address + store_header_->value_max_used.load();
 
-            if (store_header_->item_max_used != item_num) {
+            if (store_header_->item_max_used.load() != item_num) {
                 if (write_mode) {
-                    SPDLOG_ERROR("Writer Params Error. {}-{}", item_num, store_header_->item_max_used);
+                    SPDLOG_ERROR("Writer Params Error. {}-{}", item_num, store_header_->item_max_used.load());
                     return -5;
                 } else {
-                    SPDLOG_WARN("Reader Params Different. {}-{}", item_num, store_header_->item_max_used);
+                    SPDLOG_WARN("Reader Params Different. {}-{}", item_num, store_header_->item_max_used.load());
                 }
             }
 
@@ -394,7 +397,7 @@ namespace store {
             value_max_used_ = &store_header_->value_max_used;
 
             // reader item buffer
-            reader_buffer_ = new Buffer(static_cast<int32_t>(sizeof(store_item)) * (*item_max_used_));
+            reader_buffer_ = new Buffer(static_cast<int32_t>(sizeof(store_item)) * item_max_used_->load());
             if (!reader_buffer_->GetShm()) {
                 SPDLOG_ERROR("Buffer error!");
                 return -5;
@@ -405,7 +408,7 @@ namespace store {
         }
 
         int Get(store_data &key, store_data &value) {
-            const uint8_t reader_id = store_header_->current_reader_id;
+            const uint8_t reader_id = store_header_->current_reader_id.load();
             if (reader_id == 0) {
                 reader_item_ = store_data_address_.item_a_address;
                 reader_item_used_ = &store_header_->item_a_used;
@@ -466,10 +469,10 @@ namespace store {
                 SPDLOG_ERROR("current_reader_id:{}", reader_id);
                 return -1;
             }
-            SPDLOG_DEBUG("current_reader_id:{}, reader_item_used:{}", reader_id, *reader_item_used_);
+            SPDLOG_DEBUG("current_reader_id:{}, reader_item_used:{}", reader_id, reader_item_used_->load());
 
             // fix-bug, create snapshot
-            cache_used_ = *reader_item_used_;
+            cache_used_ = reader_item_used_->load();
             memcpy(reader_item_buffer_, reader_item_, cache_used_ * sizeof(store_item));
 
             store_cmp cmp_{};// wrapper
@@ -495,7 +498,7 @@ namespace store {
             // current_id:0, writer_item B, reader_item a
             // current_id:1, writer_item A, reader_item b
             uint8_t writer_item_id;
-            if (store_header_->current_item_id == 0) {
+            if (store_header_->current_item_id.load() == 0) {
                 writer_item_ = store_data_address_.item_b_address;
                 reader_item_ = store_data_address_.item_a_address;
                 writer_item_used_ = &store_header_->item_b_used;
@@ -509,20 +512,20 @@ namespace store {
                 writer_item_id = 0;
             }
 
-            *writer_item_used_ = *reader_item_used_;
-            memcpy(writer_item_, reader_item_, sizeof(store_item) * (*writer_item_used_));
-            SPDLOG_DEBUG("current_item_id:{}, writer_item_id:{}, writer_item_used:{}", store_header_->current_item_id, writer_item_id,
-                         *writer_item_used_);
+            writer_item_used_->store(reader_item_used_->load());
+            memcpy(writer_item_, reader_item_, sizeof(store_item) * (writer_item_used_->load()));
+            SPDLOG_DEBUG("current_item_id:{}, writer_item_id:{}, writer_item_used:{}", store_header_->current_item_id.load(), writer_item_id,
+                         writer_item_used_->load());
 
             // key value pointer
-            if (store_header_->current_key_id == 0) {
+            if (store_header_->current_key_id.load() == 0) {
                 writer_key_ = store_data_address_.key_a_address;
                 writer_key_used_ = &store_header_->key_a_used;
             } else {
                 writer_key_ = store_data_address_.key_b_address;
                 writer_key_used_ = &store_header_->key_b_used;
             }
-            if (store_header_->current_value_id == 0) {
+            if (store_header_->current_value_id.load() == 0) {
                 writer_value_ = store_data_address_.value_a_address;
                 writer_value_used_ = &store_header_->value_a_used;
             } else {
@@ -534,7 +537,7 @@ namespace store {
             store_cmp cmp_{};// wrapper
             cmp_.key_address = writer_key_;
             cmp_.key = &key;
-            auto b_ptr = bsearch(&cmp_, writer_item_, *writer_item_used_, sizeof(store_item), key_compare);
+            auto b_ptr = bsearch(&cmp_, writer_item_, writer_item_used_->load(), sizeof(store_item), key_compare);
             SPDLOG_DEBUG("b-search b_ptr:{}", b_ptr);
 
             int ret;
@@ -548,23 +551,23 @@ namespace store {
 
             if (ret == 0) {
                 // change reader-item
-                store_header_->current_item_id = writer_item_id;
-                if (store_header_->current_item_id == 0 && store_header_->current_key_id == 0 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 0;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 0 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 1;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 1 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 2;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 1 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 3;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 0 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 4;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 0 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 5;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 1 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 6;
+                store_header_->current_item_id.store(writer_item_id);
+                if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(0);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(1);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(2);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(3);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(4);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(5);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(6);
                 } else {
-                    store_header_->current_reader_id = 7;
+                    store_header_->current_reader_id.store(7);
                 }
             }
             return ret;
@@ -575,7 +578,7 @@ namespace store {
             // current_id:0, writer_item B, reader_item a
             // current_id:1, writer_item A, reader_item b
             uint8_t writer_item_id;
-            if (store_header_->current_item_id == 0) {
+            if (store_header_->current_item_id.load() == 0) {
                 writer_item_ = store_data_address_.item_b_address;
                 reader_item_ = store_data_address_.item_a_address;
                 writer_item_used_ = &store_header_->item_b_used;
@@ -588,20 +591,20 @@ namespace store {
                 reader_item_used_ = &store_header_->item_b_used;
                 writer_item_id = 0;
             }
-            *writer_item_used_ = *reader_item_used_;
-            memcpy(writer_item_, reader_item_, sizeof(store_item) * (*writer_item_used_));
-            SPDLOG_DEBUG("current_item_id:{}, writer_item_id:{}, writer_item_used:{}", store_header_->current_item_id, writer_item_id,
-                         *writer_item_used_);
+            writer_item_used_->store(reader_item_used_->load());
+            memcpy(writer_item_, reader_item_, sizeof(store_item) * (writer_item_used_->load()));
+            SPDLOG_DEBUG("current_item_id:{}, writer_item_id:{}, writer_item_used:{}", store_header_->current_item_id.load(), writer_item_id,
+                         writer_item_used_->load());
 
             // key value pointer
-            if (store_header_->current_key_id == 0) {
+            if (store_header_->current_key_id.load() == 0) {
                 writer_key_ = store_data_address_.key_a_address;
                 writer_key_used_ = &store_header_->key_a_used;
             } else {
                 writer_key_ = store_data_address_.key_b_address;
                 writer_key_used_ = &store_header_->key_b_used;
             }
-            if (store_header_->current_value_id == 0) {
+            if (store_header_->current_value_id.load() == 0) {
                 writer_value_ = store_data_address_.value_a_address;
                 writer_value_used_ = &store_header_->value_a_used;
             } else {
@@ -613,7 +616,7 @@ namespace store {
             store_cmp cmp_{};// wrapper
             cmp_.key_address = writer_key_;
             cmp_.key = &key;
-            auto b_ptr = bsearch(&cmp_, writer_item_, *writer_item_used_, sizeof(store_item), key_compare);
+            auto b_ptr = bsearch(&cmp_, writer_item_, writer_item_used_->load(), sizeof(store_item), key_compare);
             SPDLOG_DEBUG("b-search b_ptr:{}", b_ptr);
 
             if (b_ptr == nullptr) {
@@ -623,29 +626,29 @@ namespace store {
                 SPDLOG_DEBUG("Delete, key:{}, value:{}", key.length, key.data);
                 auto *item = (store_item *) b_ptr;
                 // not the last item
-                if (item < writer_item_ + *writer_item_used_ - 1) {
-                    memcpy(item, item + 1, sizeof(store_item) * (*writer_item_used_ + 1 - (item - writer_item_)));
+                if (item < writer_item_ + writer_item_used_->load() - 1) {
+                    memcpy(item, item + 1, sizeof(store_item) * (writer_item_used_->load() + 1 - (item - writer_item_)));
                 }
                 // last item,just sub used_num
-                *writer_item_used_ -= 1;
+                writer_item_used_->fetch_sub(1);
 
-                store_header_->current_item_id = writer_item_id;
-                if (store_header_->current_item_id == 0 && store_header_->current_key_id == 0 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 0;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 0 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 1;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 1 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 2;
-                } else if (store_header_->current_item_id == 0 && store_header_->current_key_id == 1 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 3;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 0 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 4;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 0 && store_header_->current_value_id == 1) {
-                    store_header_->current_reader_id = 5;
-                } else if (store_header_->current_item_id == 1 && store_header_->current_key_id == 1 && store_header_->current_value_id == 0) {
-                    store_header_->current_reader_id = 6;
+                store_header_->current_item_id.store(writer_item_id);
+                if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(0);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(1);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(2);
+                } else if (store_header_->current_item_id.load() == 0 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(3);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(4);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 0 && store_header_->current_value_id.load() == 1) {
+                    store_header_->current_reader_id.store(5);
+                } else if (store_header_->current_item_id.load() == 1 && store_header_->current_key_id.load() == 1 && store_header_->current_value_id.load() == 0) {
+                    store_header_->current_reader_id.store(6);
                 } else {
-                    store_header_->current_reader_id = 7;
+                    store_header_->current_reader_id.store(7);
                 }
 
                 return 0;
@@ -655,12 +658,12 @@ namespace store {
         std::vector<std::string> GetCurrentAllKeys() {
             std::vector<std::string> out;
 
-            if (store_header_->current_item_id == 0) {
+            if (store_header_->current_item_id.load() == 0) {
                 SPDLOG_INFO("item-a");
-                for (int i = 0; i < store_header_->item_a_used; i++) {
+                for (int i = 0; i < store_header_->item_a_used.load(); i++) {
                     auto *item = (store_item *) store_data_address_.item_a_address + i;
                     auto *key_buffer =
-                            store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                            store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                     char tmp[128] = {0};
                     memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                     std::string key_str(tmp);
@@ -668,10 +671,10 @@ namespace store {
                 }
             } else {
                 SPDLOG_INFO("item-b");
-                for (int i = 0; i < store_header_->item_b_used; i++) {
+                for (int i = 0; i < store_header_->item_b_used.load(); i++) {
                     auto *item = (store_item *) store_data_address_.item_b_address + i;
                     auto *key_buffer =
-                            store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                            store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                     char tmp[128] = {0};
                     memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                     std::string key_str(tmp);
@@ -690,7 +693,7 @@ namespace store {
             char *value_from_ = nullptr;
             char *value_to_ = nullptr;
             store_item *item = nullptr;
-            if (store_header_->current_value_id == 0) {
+            if (store_header_->current_value_id.load() == 0) {
                 value_from_ = store_data_address_.value_a_address;
                 value_to_ = store_data_address_.value_b_address;
             } else {
@@ -698,19 +701,19 @@ namespace store {
                 value_to_ = store_data_address_.value_a_address;
             }
 
-            *writer_value_used_ = 0;
-            for (int32_t i = 0; i < *writer_item_used_; i++) {
+            writer_value_used_->store(0);
+            for (int32_t i = 0; i < writer_item_used_->load(); i++) {
                 item = writer_item_ + i;
-                memcpy(value_to_ + *writer_value_used_, value_from_ + item->value_offset, item->value_len);
-                item->value_offset = *writer_value_used_;
-                *writer_value_used_ += item->value_len;
+                memcpy(value_to_ + writer_value_used_->load(), value_from_ + item->value_offset, item->value_len);
+                item->value_offset = writer_value_used_->load();
+                writer_value_used_->fetch_add(item->value_len);
             }
 
             // change id
-            store_header_->current_value_id = store_header_->current_value_id == 0 ? 1 : 0;
+            store_header_->current_value_id.store(store_header_->current_value_id.load() == 0 ? 1 : 0);
             // change value id
-            store_header_->current_value_id = store_header_->current_value_id == 0 ? 1 : 0;
-            if (store_header_->current_value_id == 0) {
+            store_header_->current_value_id.store(store_header_->current_value_id.load() == 0 ? 1 : 0);
+            if (store_header_->current_value_id.load() == 0) {
                 writer_value_ = store_data_address_.value_a_address;
                 writer_value_used_ = &store_header_->value_a_used;
             } else {
@@ -723,16 +726,16 @@ namespace store {
         }
 
         void ShowHeader() {
-            SPDLOG_INFO("store_header-current_item_id:{}", store_header_->current_item_id);
-            SPDLOG_INFO("store_header-current_key_id:{}", store_header_->current_key_id);
-            SPDLOG_INFO("store_header-current_value_id:{}", store_header_->current_value_id);
-            SPDLOG_INFO("store_header-item_a_used:{}", store_header_->item_a_used);
-            SPDLOG_INFO("store_header-item_b_used:{}", store_header_->item_b_used);
-            SPDLOG_INFO("store_header-key_a_used:{}", store_header_->key_a_used);
-            SPDLOG_INFO("store_header-key_b_used:{}", store_header_->key_b_used);
-            SPDLOG_INFO("store_header-value_a_used:{}", store_header_->value_a_used);
-            SPDLOG_INFO("store_header-value_b_used:{}", store_header_->value_b_used);
-            SPDLOG_INFO("store_header-item_max_used_:{}", store_header_->item_max_used);
+            SPDLOG_INFO("store_header-current_item_id:{}", store_header_->current_item_id.load());
+            SPDLOG_INFO("store_header-current_key_id:{}", store_header_->current_key_id.load());
+            SPDLOG_INFO("store_header-current_value_id:{}", store_header_->current_value_id.load());
+            SPDLOG_INFO("store_header-item_a_used:{}", store_header_->item_a_used.load());
+            SPDLOG_INFO("store_header-item_b_used:{}", store_header_->item_b_used.load());
+            SPDLOG_INFO("store_header-key_a_used:{}", store_header_->key_a_used.load());
+            SPDLOG_INFO("store_header-key_b_used:{}", store_header_->key_b_used.load());
+            SPDLOG_INFO("store_header-value_a_used:{}", store_header_->value_a_used.load());
+            SPDLOG_INFO("store_header-value_b_used:{}", store_header_->value_b_used.load());
+            SPDLOG_INFO("store_header-item_max_used_:{}", store_header_->item_max_used.load());
             SPDLOG_INFO("store_header: {}", (void *) store_header_);
             SPDLOG_INFO("store_header-item_a_address: {}", (void *) store_data_address_.item_a_address);
             SPDLOG_INFO("store_header-item_b_address: {}", (void *) store_data_address_.item_b_address);
@@ -743,12 +746,12 @@ namespace store {
         }
 
         void ShowCurrentKey() {
-            if (store_header_->current_item_id == 0) {
+            if (store_header_->current_item_id.load() == 0) {
                 SPDLOG_INFO("item-a");
-                for (int i = 0; i < store_header_->item_a_used; i++) {
+                for (int i = 0; i < store_header_->item_a_used.load(); i++) {
                     auto *item = (store_item *) store_data_address_.item_a_address + i;
                     auto *key_buffer =
-                            store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                            store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                     char tmp[128] = {0};
                     memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                     SPDLOG_INFO("item:{}, key:{}, key_offset:{}, key_len:{}, value_offset:{}, value_len:{}",
@@ -756,10 +759,10 @@ namespace store {
                 }
             } else {
                 SPDLOG_INFO("item-b");
-                for (int i = 0; i < store_header_->item_b_used; i++) {
+                for (int i = 0; i < store_header_->item_b_used.load(); i++) {
                     auto *item = (store_item *) store_data_address_.item_b_address + i;
                     auto *key_buffer =
-                            store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                            store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                     char tmp[128] = {0};
                     memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                     SPDLOG_INFO("item:{}, key:{}, key_offset:{}, key_len:{}, value_offset:{}, value_len:{}",
@@ -769,20 +772,20 @@ namespace store {
         }
 
         void ShowAllKey() {
-            SPDLOG_INFO("current_item_id:{}, current_key_id:{}, current_value_id:{}", store_header_->current_item_id, store_header_->current_key_id, store_header_->current_value_id);
+            SPDLOG_INFO("current_item_id:{}, current_key_id:{}, current_value_id:{}", store_header_->current_item_id.load(), store_header_->current_key_id.load(), store_header_->current_value_id.load());
             SPDLOG_INFO("item-a");
-            for (int i = 0; i < store_header_->item_a_used; i++) {
+            for (int i = 0; i < store_header_->item_a_used.load(); i++) {
                 auto *item = (store_item *) store_data_address_.item_a_address + i;
-                auto *key_buffer = store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                auto *key_buffer = store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                 char tmp[128] = {0};
                 memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                 SPDLOG_INFO("item:{}, key:{}, key_offset:{}, key_len:{}, value_offset:{}, value_len:{}",
                             i, tmp, item->key_offset, item->key_len, item->value_offset, item->value_len);
             }
             SPDLOG_INFO("item-b");
-            for (int i = 0; i < store_header_->item_b_used; i++) {
+            for (int i = 0; i < store_header_->item_b_used.load(); i++) {
                 auto *item = (store_item *) store_data_address_.item_b_address + i;
-                auto *key_buffer = store_header_->current_key_id == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
+                auto *key_buffer = store_header_->current_key_id.load() == 0 ? store_data_address_.key_a_address : store_data_address_.key_b_address;
                 char tmp[128] = {0};
                 memcpy(&tmp, key_buffer + item->key_offset, item->key_len);
                 SPDLOG_INFO("item:{}, key:{}, key_offset:{}, key_len:{}, value_offset:{}, value_len:{}",
